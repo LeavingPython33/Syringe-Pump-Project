@@ -6,24 +6,30 @@
 
 #include <AccelStepper.h>
 
-AccelStepper stepper(AccelStepper::DRIVER, 3, 2);
+AccelStepper stepper(AccelStepper::DRIVER, 0, 0);
 
-const int endSwitchPin = 0;
+//Electrical Componenent Pins
+const int limitSwitchPin = 0;
 const int buttonPin = 0;
 const int potPin = 0;
 const int rgbPin[3] = {0, 0, 0};
 
+const int leftButtonPin = 0;
+const int rightButtonPin = 0;
+
+//Physical Item Attribute
 const int microStep = 0; //Steps/Rev
-const int diameter = 0; //mm
+const int diameter = 19; //mm 19/14.5
 const int leadScrew = 8; //mm
 
-int flowRate = 0; //Input desired flowRate
-int speed = (flowRate /(PI * pow((diameter / 2), 2))); //mm/s
-int stepPerSec = (speed / leadScrew) * microStep; //Steps/s
+//FlowRate calculator
+double flowRate = 0; //Input desired flowRate in ml/s
+double speed = (flowRate /(PI * pow((diameter / 2), 2)) * 1000); //mm/s
+double stepPerSec = (speed / leadScrew) * microStep; //Steps/s
 
-
-//const int speed = ((stepPerSec/microStep) * leadScrew
-//int flowRate = (PI * speed * pow((diameter / 2), 2)); 
+//Dynamic flowrate
+int prevPotVal = 0; //Dynamic flow rate
+int dynamic = false; //Dynamic On/Off
 
 void setup() {
   //Initialize Button
@@ -41,21 +47,59 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  int buttonVal = digitalRead(buttonPin);
-  int potVal = digitalRead(potPin); // 0 - 1023
+  //Reading Pins
+  int buttonVal = digitalRead(buttonPin); // On/Off
+  int limVal = digitalRead(limitSwitchPin); // NonEmpty/Empty
+  int potVal = digitalRead(potPin); // 0 - 1023 (0 - 1ml)
+  int leftButtonVal = digitalRead(leftButtonPin);
+  int rightButtonVal = digitalRead(rightButtonPin);
 
-  if(buttonVal == HIGH){
-    int rgb[3] = {0, 255, 0};
-    writeLed(rgb);
-    stepper.runSpeed();
-    
-  }
-  else{
+  //Dynamic FlowRate
+  if(potVal != prevPotVal and dynamic){
+    prevPotVal = potVal;
+    computeSteps((double)prevPotVal/1000);
+  }  
+
+  if(limVal == HIGH){
+    //Syringe Empty
     int rgb[3] = {255, 0, 0};
     writeLed(rgb);
     stepper.stop();
   }
+  else if(leftButtonVal == HIGH){
+    //Moving Left
+    int rgb[3] = {0, 255, 0};
+    stepper.setSpeed(-stepPerSec);
+    writeLed(rgb);
+  }
+  else if(rightButtonVal == HIGH){
+    //Moving Right
+    int rgb[3] = {0, 255, 0};
+    writeLed(rgb);
+    stepper.setSpeed(stepPerSec);
+    stepper.runSpeed();
+  }
+  else{
+    //Moving Right if button is ON
+    stepper.setSpeed(stepPerSec);
+    if(buttonVal == HIGH){
+      int rgb[3] = {0, 255, 0};
+      writeLed(rgb);
+      stepper.runSpeed();
+      
+    }
+    else{
+      int rgb[3] = {0, 0, 255};
+      writeLed(rgb);
+      stepper.stop();
+    }
+  }
+}
+
+void computeSteps(double flow){
+  flowRate = flow;
+  speed = (flowRate /(PI * pow((diameter / 2), 2)) * 1000); //mm/s
+  stepPerSec = (speed / leadScrew) * microStep; //Steps/s
 }
 
 void writeLed(int rgb[]){
